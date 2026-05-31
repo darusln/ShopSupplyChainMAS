@@ -14,24 +14,24 @@ import jade.domain.FIPAAgentManagement.FailureException;
 
 public class SupplierAgent extends Agent {
 
-    private double price;
+    private double basePrice;
+    private double currentPrice;
     private int deliveryTime;
     private int stock;
     private int maxStock = 200;
 
     @Override
     protected void setup() {
-        System.out.println("Supplier-agent " + getAID().getName() + " is ready.");
+        System.out.println("Supplier agent " + getAID().getName() + " is ready.");
 
-        // Randomize initial values to create variety among suppliers
+        // randomize initial values to create variety among suppliers
         this.stock = 100 + (int)(Math.random() * 50);
-        this.price = 80.0 + (Math.random() * 70.0); 
-        this.price = Math.round(this.price * 100.0) / 100.0;
-        this.deliveryTime = 1 + (int)(Math.random() * 5); 
+        this.basePrice = 80.0 + (Math.random() * 70.0);
+        this.currentPrice = Math.round(this.basePrice * 100.0) / 100.0;
+        this.deliveryTime = 1 + (int)(Math.random() * 5);
 
-        System.out.println(getAID().getLocalName() + " Config -> Stock: " + stock + ", Price: " + price + ", Delivery: " + deliveryTime);
-
-        // Register supplier service in yellow pages
+        System.out.println(getAID().getLocalName() + " Config -> Stock: " + stock + ", Base Price: " + currentPrice + ", Delivery: " + deliveryTime);
+        // register supplier service in yellow pages
         DFAgentDescription dfd = new DFAgentDescription();
         dfd.setName(getAID());
         ServiceDescription sd = new ServiceDescription();
@@ -45,29 +45,24 @@ public class SupplierAgent extends Agent {
             fe.printStackTrace();
         }
 
-        // Add the FIPA Contract Net Responder behavior
         MessageTemplate template = ContractNetResponder.createMessageTemplate(FIPANames.InteractionProtocol.FIPA_CONTRACT_NET);
         addBehaviour(new ContractNetResponder(this, template) {
             @Override
             protected ACLMessage handleCfp(ACLMessage cfp) throws NotUnderstoodException, RefuseException {
-                System.out.println(getLocalName() + ": Received CFP from " + cfp.getSender().getLocalName());
                 int requestedQuantity = Integer.parseInt(cfp.getContent());
 
                 if (requestedQuantity <= stock) {
-                    // We can provide the requested quantity
                     ACLMessage propose = cfp.createReply();
                     propose.setPerformative(ACLMessage.PROPOSE);
                     try {
-                        Proposal offer = new Proposal(price, deliveryTime, requestedQuantity, getLocalName());
+                        Proposal offer = new Proposal(currentPrice, deliveryTime, requestedQuantity, getLocalName());
                         propose.setContentObject(offer);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
-                    System.out.println(getLocalName() + ": Proposing price " + price + " for " + requestedQuantity + " units.");
+                    System.out.println(getLocalName() + ": Proposing price " + currentPrice + " for " + requestedQuantity + " units.");
                     return propose;
                 } else {
-                    // Refuse if not enough stock
-                    System.out.println(getLocalName() + ": Refusing CFP (Low stock: " + stock + ")");
                     throw new RefuseException("insufficient-stock");
                 }
             }
@@ -79,13 +74,11 @@ public class SupplierAgent extends Agent {
                     Proposal p = (Proposal) propose.getContentObject();
                     if (p.getQuantity() <= stock) {
                         stock -= p.getQuantity();
-                        System.out.println(getLocalName() + ": Order processed. Remaining Stock: " + stock);
                         ACLMessage inform = accept.createReply();
                         inform.setPerformative(ACLMessage.INFORM);
                         inform.setContent("Order delivered.");
                         return inform;
                     } else {
-                        System.out.println(getLocalName() + ": Delivery failure (Stock ran out since proposal).");
                         throw new FailureException("stock-exhausted");
                     }
                 } catch (Exception e) {
@@ -103,10 +96,16 @@ public class SupplierAgent extends Agent {
         addBehaviour(new TickerBehaviour(this, 10000) {
             @Override
             protected void onTick() {
+                // restock inventory
                 if (stock < maxStock) {
                     int restockAmount = 10 + (int)(Math.random() * 10);
                     stock = Math.min(maxStock, stock + restockAmount);
                 }
+
+                // improve competition by fluctuating prices slightly over time
+                // alter price by +/- 5% to allow different suppliers to win
+                double fluctuation = 0.95 + (Math.random() * 0.10);
+                currentPrice = Math.round(basePrice * fluctuation * 100.0) / 100.0;
             }
         });
     }
@@ -118,6 +117,6 @@ public class SupplierAgent extends Agent {
         } catch (FIPAException fe) {
             fe.printStackTrace();
         }
-        System.out.println("Supplier-agent " + getAID().getName() + " terminating.");
+        System.out.println("Supplier agent " + getAID().getName() + " terminating.");
     }
 }

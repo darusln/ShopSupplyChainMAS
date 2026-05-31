@@ -6,41 +6,33 @@ import jade.wrapper.AgentController;
 
 public class Main {
     public static void main(String[] args) {
-        // 1. Get the JADE Runtime instance
         Runtime runtime = Runtime.instance();
 
-        // 2. Create a default profile for the Main Container
+        // default profile for main container
         Profile profile = new ProfileImpl();
 
-        // Optional: Show the JADE GUI (the RMA agent)
+        // RMA agent
         profile.setParameter(Profile.GUI, "true");
 
-        // 3. Create the Main Container
         AgentContainer mainContainer = runtime.createMainContainer(profile);
 
         try {
-            // 4. Start the Supplier Agents FIRST so they can register with the DF
-            AgentController supplier1 = mainContainer.createNewAgent("SupplierA", "SupplierAgent", null);
-            AgentController supplier2 = mainContainer.createNewAgent("SupplierB", "SupplierAgent", null);
-            AgentController supplier3 = mainContainer.createNewAgent("SupplierC", "SupplierAgent", null);
+            // start the sup agents firfst so they can register with the DF
+            int numSuppliers = 3;
+            for (int i = 1; i <= numSuppliers; i++) {
+                AgentController supplier = mainContainer.createNewAgent("Supplier" + i, "SupplierAgent", null);
+                supplier.start();
+            }
 
-            supplier1.start();
-            supplier2.start();
-            supplier3.start();
-
-            // Give the suppliers a brief moment to register their services
-            Thread.sleep(1000);
-
-            // 5. Start the Shop Agent with CUSTOM parameters
-            // Parameters: {InitialStock, Threshold, RefillQuantity, Budget, MaxDeliveryDays, PriceWeight, DeliveryWeight}
+            // start the Shop Agent with custom parameters
             Object[] shopArguments = new Object[] {
-                "10",      // Initial Stock
-                "15",      // Threshold (reorder when stock <= 15)
-                "20",      // Refill Quantity
-                "7000", // Budget
-                "6",       // Max Delivery Days
-                "0.8",     // Price Weight (80% importance)
-                "0.2"      // Delivery Weight (20% importance)
+                "10", // init stock
+                "15", // threshold to trigger refill
+                "20", // refill quantity
+                "7000", // budget
+                "6", // max del days
+                "0.8", // price weight (80% importance)
+                "0.2" // delivery weight (20% importance)
             };
 
             AgentController shop = mainContainer.createNewAgent("MyShop", "ShopAgent", shopArguments);

@@ -1,10 +1,6 @@
 import java.io.Serial;
 import java.io.Serializable;
 
-/**
- * This is a proposal sent from the SupplierAgent to Shop Agent
- * Serializable needs to be implemented in order to be embedded in an ACLMessage.
- */
 public class Proposal implements Serializable {
 
     @Serial

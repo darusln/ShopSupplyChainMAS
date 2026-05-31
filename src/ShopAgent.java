@@ -13,61 +13,59 @@ import java.util.Enumeration;
 
 public class ShopAgent extends Agent {
 
-    // Default Inventory parameters
+    // def parameters
     private int currentStock = 20;
     private int threshold = 10;
     private int targetQuantity = 50;
     private double budget = 10000.00;
     private int maxDeliveryDays = 10;
-
-    // Default Weights for evaluation
     private double priceWeight = 0.7;
     private double deliveryWeight = 0.3;
 
     private AID[] supplierAgents;
     private boolean isNegotiating = false;
 
+    private int orderCount = 0;
+    private double totalSpent = 0.0;
+    private double lastAcceptedPrice = 0.0;
+    private int lastAcceptedQuantity = 0;
+
     @Override
     protected void setup() {
-        // Parse arguments if provided
         Object[] args = getArguments();
         if (args != null && args.length > 0) {
             try {
-                if (args.length > 1) currentStock = Integer.parseInt((String) args[0]);
-                if (args.length >= 2) threshold = Integer.parseInt((String) args[1]);
-                if (args.length >= 3) targetQuantity = Integer.parseInt((String) args[2]);
-                if (args.length >= 4) budget = Double.parseDouble((String) args[3]);
-                if (args.length >= 5) maxDeliveryDays = Integer.parseInt((String) args[4]);
-                if (args.length >= 6) priceWeight = Double.parseDouble((String) args[5]);
-                if (args.length >= 7) deliveryWeight = Double.parseDouble((String) args[6]);
-                
-                System.out.println("Shop-agent " + getAID().getLocalName() + " initialized with CUSTOM parameters.");
+                if (args.length > 0) currentStock = Integer.parseInt((String) args[0]);
+                if (args.length > 1) threshold = Integer.parseInt((String) args[1]);
+                if (args.length > 2) targetQuantity = Integer.parseInt((String) args[2]);
+                if (args.length > 3) budget = Double.parseDouble((String) args[3]);
+                if (args.length > 4) maxDeliveryDays = Integer.parseInt((String) args[4]);
+                if (args.length > 5) priceWeight = Double.parseDouble((String) args[5]);
+                if (args.length > 6) deliveryWeight = Double.parseDouble((String) args[6]);
+
+                System.out.println("Shop agent " + getAID().getLocalName() + " initialized with custom param");
             } catch (Exception e) {
-                System.err.println("Error parsing arguments for " + getAID().getLocalName() + ". Using defaults.");
+                System.err.println("Error parsing arguments for " + getAID().getLocalName());
             }
         } else {
-            System.out.println("Shop-agent " + getAID().getLocalName() + " initialized with DEFAULT parameters.");
+            System.out.println("Shop agent " + getAID().getLocalName() + " initialized with default param");
         }
 
-        System.out.println("--- CONFIGURATION ---");
-        System.out.println("Initial Stock: " + currentStock);
-        System.out.println("Threshold: " + threshold);
-        System.out.println("Refill Quantity: " + targetQuantity);
-        System.out.println("Budget: $" + budget);
-        System.out.println("Max Delivery: " + maxDeliveryDays + " days");
-        System.out.println("Weights: Price=" + priceWeight + ", Delivery=" + deliveryWeight);
-        System.out.println("---------------------");
+        System.out.println("Configuration");
+        System.out.println("Initial stock: " + currentStock);
+        System.out.println("Budget: " + budget);
 
-        discoverSuppliers();
-
-        // Sales Simulator (Every 5 seconds)
-        addBehaviour(new SalesSimulator(this, 5000));
-
-        // Periodic Supplier Discovery (Every 30 seconds)
-        addBehaviour(new TickerBehaviour(this, 30000) {
+        // robust DF polling instead of Thread.sleep
+        addBehaviour(new TickerBehaviour(this, 3000) {
+            private boolean salesStarted = false;
             @Override
             protected void onTick() {
                 discoverSuppliers();
+                if (!salesStarted && supplierAgents != null && supplierAgents.length > 0) {
+                    System.out.println(getLocalName() + "found " + supplierAgents.length + " suppliers");
+                    addBehaviour(new SalesSimulator(myAgent, 5000));
+                    salesStarted = true;
+                }
             }
         });
     }
@@ -95,11 +93,18 @@ public class ShopAgent extends Agent {
 
         @Override
         protected void onTick() {
+            // stop if budget is exhausted
+            if (budget <= 0) {
+                System.out.println("\nno budget left");
+                stop();
+                return;
+            }
+
             if (currentStock > 0) {
                 int sales = (int) (Math.random() * 5) + 1;
                 currentStock = Math.max(0, currentStock - sales);
-                System.out.println("\n--- " + getAID().getLocalName() + " SALES ---");
-                System.out.println("Items sold: " + sales + " | Remaining Stock: " + currentStock);
+                System.out.println("\n " + getAID().getLocalName() + " SALES");
+                System.out.println("Items sold: " + sales + " | Remaining stock: " + currentStock);
             }
 
             if (currentStock <= threshold && !isNegotiating) {
@@ -110,12 +115,12 @@ public class ShopAgent extends Agent {
 
     private void initiateProcurement() {
         if (supplierAgents == null || supplierAgents.length == 0) {
-            System.out.println(getAID().getLocalName() + ": No suppliers available for restocking.");
+            System.out.println(getAID().getLocalName() + ": No suppliers available for restocking");
             return;
         }
 
         isNegotiating = true;
-        System.out.println(getAID().getLocalName() + ": Stock below threshold (" + threshold + "). Initiating FIPA Contract Net...");
+        System.out.println(getAID().getLocalName() + ": Stock below threshold (" + threshold + ")");
 
         ACLMessage cfp = new ACLMessage(ACLMessage.CFP);
         for (AID agent : supplierAgents) {
@@ -157,6 +162,14 @@ public class ShopAgent extends Agent {
                     if (response == bestOffer) {
                         reply.setPerformative(ACLMessage.ACCEPT_PROPOSAL);
                         reply.setContent("Order confirmed.");
+
+                        try {
+                            // track trans to update budget later
+                            Proposal winningP = (Proposal) bestOffer.getContentObject();
+                            lastAcceptedPrice = winningP.getPrice();
+                            lastAcceptedQuantity = winningP.getQuantity();
+                        } catch (Exception ex) { }
+
                     } else {
                         reply.setPerformative(ACLMessage.REJECT_PROPOSAL);
                         reply.setContent("Better offer found.");
@@ -164,19 +177,32 @@ public class ShopAgent extends Agent {
                     acceptances.addElement(reply);
                 }
 
-                if (bestOffer != null) {
-                    System.out.println(getAID().getLocalName() + ": Accepting proposal from " + bestOffer.getSender().getLocalName());
-                } else {
-                    System.out.println(getAID().getLocalName() + ": No suitable offers found.");
+                if (bestOffer == null) {
+                    System.out.println(getAID().getLocalName() + ": No suitable offers found. Budget might be too low ($" + String.format("%.2f", budget) + ").");
                     isNegotiating = false;
                 }
             }
 
             @Override
             protected void handleInform(ACLMessage inform) {
-                System.out.println(getAID().getLocalName() + ": Received delivery from " + inform.getSender().getLocalName());
                 currentStock += targetQuantity;
-                System.out.println(getAID().getLocalName() + ": Inventory Updated. New Stock: " + currentStock);
+                orderCount++;
+
+                // update Budget
+                double orderCost = lastAcceptedPrice * lastAcceptedQuantity;
+                budget -= orderCost;
+                totalSpent += orderCost;
+
+                System.out.println("\n orders");
+                System.out.println("Order no: " + orderCount);
+                System.out.println("Supplier: " + inform.getSender().getLocalName());
+                System.out.println("Quantity: " + lastAcceptedQuantity);
+                System.out.println("Unit price: " + String.format("%.2f", lastAcceptedPrice));
+                System.out.println("Total cost: " + String.format("%.2f", orderCost));
+                System.out.println("New stock: " + currentStock);
+                System.out.println("Total spent: " + String.format("%.2f", totalSpent));
+                System.out.println("Budget lef: " + String.format("%.2f", Math.max(0, budget)));
+
                 isNegotiating = false;
             }
 
@@ -194,6 +220,6 @@ public class ShopAgent extends Agent {
 
     @Override
     protected void takeDown() {
-        System.out.println("Shop-agent " + getAID().getName() + " terminating.");
+        System.out.println("Shop agent " + getAID().getName() + " terminating.");
     }
 }
