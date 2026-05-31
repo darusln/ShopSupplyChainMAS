@@ -49,7 +49,9 @@ public class SupplierAgent extends Agent {
         addBehaviour(new ContractNetResponder(this, template) {
             @Override
             protected ACLMessage handleCfp(ACLMessage cfp) throws NotUnderstoodException, RefuseException {
-                int requestedQuantity = Integer.parseInt(cfp.getContent());
+                String[] requestParts = cfp.getContent().split(",");
+                String requestedProduct = requestParts[0];
+                int requestedQuantity = Integer.parseInt(requestParts[1]);
 
                 if (requestedQuantity <= stock) {
                     ACLMessage propose = cfp.createReply();
@@ -60,7 +62,7 @@ public class SupplierAgent extends Agent {
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
-                    System.out.println(getLocalName() + ": Proposing price " + currentPrice + " for " + requestedQuantity + " units.");
+                    System.out.println(getLocalName() + ": Received CFP for " + requestedQuantity + " units of " + requestedProduct);
                     return propose;
                 } else {
                     throw new RefuseException("insufficient-stock");

@@ -21,6 +21,7 @@ public class ShopAgent extends Agent {
     private int maxDeliveryDays = 10;
     private double priceWeight = 0.7;
     private double deliveryWeight = 0.3;
+    private String productName = "Item";
 
     private AID[] supplierAgents;
     private boolean isNegotiating = false;
@@ -35,13 +36,14 @@ public class ShopAgent extends Agent {
         Object[] args = getArguments();
         if (args != null && args.length > 0) {
             try {
-                if (args.length > 0) currentStock = Integer.parseInt((String) args[0]);
-                if (args.length > 1) threshold = Integer.parseInt((String) args[1]);
-                if (args.length > 2) targetQuantity = Integer.parseInt((String) args[2]);
-                if (args.length > 3) budget = Double.parseDouble((String) args[3]);
-                if (args.length > 4) maxDeliveryDays = Integer.parseInt((String) args[4]);
-                if (args.length > 5) priceWeight = Double.parseDouble((String) args[5]);
-                if (args.length > 6) deliveryWeight = Double.parseDouble((String) args[6]);
+                if (args.length > 0) productName = (String) args[0];
+                if (args.length > 1) currentStock = Integer.parseInt((String) args[1]);
+                if (args.length > 2) threshold = Integer.parseInt((String) args[2]);
+                if (args.length > 3) targetQuantity = Integer.parseInt((String) args[3]);
+                if (args.length > 4) budget = Double.parseDouble((String) args[4]);
+                if (args.length > 5) maxDeliveryDays = Integer.parseInt((String) args[5]);
+                if (args.length > 6) priceWeight = Double.parseDouble((String) args[6]);
+                if (args.length > 7) deliveryWeight = Double.parseDouble((String) args[7]);
 
                 System.out.println("Shop agent " + getAID().getLocalName() + " initialized with custom param");
             } catch (Exception e) {
@@ -52,6 +54,7 @@ public class ShopAgent extends Agent {
         }
 
         System.out.println("Configuration");
+        System.out.println("Product tracked: " + productName);
         System.out.println("Initial stock: " + currentStock);
         System.out.println("Budget: " + budget);
 
@@ -127,7 +130,7 @@ public class ShopAgent extends Agent {
             cfp.addReceiver(agent);
         }
         cfp.setProtocol(FIPANames.InteractionProtocol.FIPA_CONTRACT_NET);
-        cfp.setContent(String.valueOf(targetQuantity));
+        cfp.setContent(productName + "," + targetQuantity);
         cfp.setReplyByDate(new java.util.Date(System.currentTimeMillis() + 10000));
 
         addBehaviour(new ContractNetInitiator(this, cfp) {
@@ -155,6 +158,10 @@ public class ShopAgent extends Agent {
                     }
                 }
 
+                // Add the Rejection Summary requirement
+                StringBuilder rejectionRecord = new StringBuilder("\nrejected offers\n");
+                int rejectedCount = 0;
+
                 e = responses.elements();
                 while (e.hasMoreElements()) {
                     ACLMessage response = (ACLMessage) e.nextElement();
@@ -173,8 +180,21 @@ public class ShopAgent extends Agent {
                     } else {
                         reply.setPerformative(ACLMessage.REJECT_PROPOSAL);
                         reply.setContent("Better offer found.");
+
+                        try {
+                            Proposal rejectedP = (Proposal) response.getContentObject();
+                            rejectionRecord.append("- ").append(response.getSender().getLocalName())
+                                    .append(" offered $").append(String.format("%.2f", rejectedP.getPrice()))
+                                    .append(" (Delivery: ").append(rejectedP.getDeliveryTime()).append(" days)\n");
+                            rejectedCount++;
+                        } catch (Exception ex) { }
                     }
                     acceptances.addElement(reply);
+                }
+
+                // summary of rejected offers
+                if (rejectedCount > 0) {
+                    System.out.println(rejectionRecord.toString());
                 }
 
                 if (bestOffer == null) {
@@ -195,6 +215,7 @@ public class ShopAgent extends Agent {
 
                 System.out.println("\n orders");
                 System.out.println("Order no: " + orderCount);
+                System.out.println("Product: " + productName);
                 System.out.println("Supplier: " + inform.getSender().getLocalName());
                 System.out.println("Quantity: " + lastAcceptedQuantity);
                 System.out.println("Unit price: " + String.format("%.2f", lastAcceptedPrice));
