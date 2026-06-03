@@ -26,7 +26,7 @@ public class SupplierAgent extends Agent {
 
         // randomize initial values to create variety among suppliers
         this.stock = 100 + (int)(Math.random() * 50);
-        this.basePrice = 80.0 + (Math.random() * 70.0);
+        this.basePrice = 90.0 + (Math.random() * 20.0);
         this.currentPrice = Math.round(this.basePrice * 100.0) / 100.0;
         this.deliveryTime = 1 + (int)(Math.random() * 5);
 
@@ -48,7 +48,7 @@ public class SupplierAgent extends Agent {
         MessageTemplate template = ContractNetResponder.createMessageTemplate(FIPANames.InteractionProtocol.FIPA_CONTRACT_NET);
         addBehaviour(new ContractNetResponder(this, template) {
             @Override
-            protected ACLMessage handleCfp(ACLMessage cfp) throws NotUnderstoodException, RefuseException {
+            protected ACLMessage handleCfp(ACLMessage cfp) throws RefuseException {
                 String[] requestParts = cfp.getContent().split(",");
                 String requestedProduct = requestParts[0];
                 int requestedQuantity = Integer.parseInt(requestParts[1]);
@@ -71,14 +71,14 @@ public class SupplierAgent extends Agent {
 
             @Override
             protected ACLMessage handleAcceptProposal(ACLMessage cfp, ACLMessage propose, ACLMessage accept) throws FailureException {
-                System.out.println(getLocalName() + ": Proposal ACCEPTED by " + accept.getSender().getLocalName());
+                System.out.println(getLocalName() + ": Proposal acepted by " + accept.getSender().getLocalName());
                 try {
                     Proposal p = (Proposal) propose.getContentObject();
                     if (p.getQuantity() <= stock) {
                         stock -= p.getQuantity();
                         ACLMessage inform = accept.createReply();
                         inform.setPerformative(ACLMessage.INFORM);
-                        inform.setContent("Order delivered.");
+                        inform.setContent("Order delivered");
                         return inform;
                     } else {
                         throw new FailureException("stock-exhausted");
@@ -105,8 +105,8 @@ public class SupplierAgent extends Agent {
                 }
 
                 // improve competition by fluctuating prices slightly over time
-                // alter price by +/- 5% to allow different suppliers to win
-                double fluctuation = 0.95 + (Math.random() * 0.10);
+                // alter price to allow different suppliers to win
+                double fluctuation = 0.85 + (Math.random() * 0.50);
                 currentPrice = Math.round(basePrice * fluctuation * 100.0) / 100.0;
             }
         });

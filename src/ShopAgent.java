@@ -158,7 +158,6 @@ public class ShopAgent extends Agent {
                     }
                 }
 
-                // Add the Rejection Summary requirement
                 StringBuilder rejectionRecord = new StringBuilder("\nrejected offers\n");
                 int rejectedCount = 0;
 
@@ -184,7 +183,7 @@ public class ShopAgent extends Agent {
                         try {
                             Proposal rejectedP = (Proposal) response.getContentObject();
                             rejectionRecord.append("- ").append(response.getSender().getLocalName())
-                                    .append(" offered $").append(String.format("%.2f", rejectedP.getPrice()))
+                                    .append(" offered ").append(String.format("%.2f", rejectedP.getPrice()))
                                     .append(" (Delivery: ").append(rejectedP.getDeliveryTime()).append(" days)\n");
                             rejectedCount++;
                         } catch (Exception ex) { }
@@ -197,9 +196,23 @@ public class ShopAgent extends Agent {
                     System.out.println(rejectionRecord.toString());
                 }
 
+                if (bestOffer != null) {
+                    try {
+                        Proposal winningP = (Proposal) bestOffer.getContentObject();
+                        System.out.println("\naccepted offer");
+                        System.out.println("Supplier: " + bestOffer.getSender().getLocalName());
+                        System.out.println("offered : " + String.format("%.2f", winningP.getPrice()));
+                        System.out.println("Delivery: " + winningP.getDeliveryTime() + " days");
+                    } catch (Exception ex) {}
+                }
+
                 if (bestOffer == null) {
-                    System.out.println(getAID().getLocalName() + ": No suitable offers found. Budget might be too low ($" + String.format("%.2f", budget) + ").");
+                    System.out.println("\ninsufficient funds");
+                    System.out.println(getAID().getLocalName() + ":no affordable offers");
+                    System.out.println("Final budget: " + String.format("%.2f", budget));
+
                     isNegotiating = false;
+                    myAgent.doDelete();
                 }
             }
 

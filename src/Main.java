@@ -27,7 +27,7 @@ public class Main {
 
         try {
             // start the sup agents firfst so they can register with the DF
-            int numSuppliers = 3;
+            int numSuppliers = 4;
             for (int i = 1; i <= numSuppliers; i++) {
                 AgentController supplier = mainContainer.createNewAgent("Supplier" + i, "SupplierAgent", null);
                 supplier.start();
